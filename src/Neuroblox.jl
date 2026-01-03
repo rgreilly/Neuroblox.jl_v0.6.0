@@ -119,6 +119,7 @@ include("blox/blox_utilities.jl")
 include("GraphDynamicsInterop/GraphDynamicsInterop.jl")
 include("Neurographs.jl")
 include("adjacency.jl")
+include("blox/LSM.jl")
 
 const Neuron = AbstractNeuronBlox
 const SpikeSource = AbstractSpikeSource
@@ -259,4 +260,7 @@ export voltage_timeseries, meanfield_timeseries, state_timeseries, get_neurons, 
 export AdjacencyMatrix, Connector, connection_rule, connection_equations, connection_spike_affects, connection_learning_rules, connection_callbacks
 export inputs, outputs, equations, unknowns, parameters, discrete_events
 export MetabolicHHNeuron
+export IzhikevichExciBlox, IzhikevichInhibBlox, LSMReservoirBlox
+export encode_image_to_currents, extract_reservoir_states
+export train_ridge_readout, classify, generate_shapes
 end
