@@ -1223,3 +1223,75 @@ function Connector(
 
     return Connector(nameof(sys_src), nameof(sys_dest); equation=eq, weight=w)
 end
+
+# Connection from Excitatory Izhikevich to any Izhikevich (E→E or E→I)
+function Connector(
+    blox_src::IzhikevichExciBlox,
+    blox_dest::Union{IzhikevichExciBlox, IzhikevichInhibBlox};
+    kwargs...
+)
+    sys_src = get_namespaced_sys(blox_src)
+    sys_dest = get_namespaced_sys(blox_dest)
+    
+    w = generate_weight_param(blox_src, blox_dest; kwargs...)
+    
+    # Excitatory connection: conductance-based with reversal potential
+    # I_syn = w * G_pre * (E_syn_pre - V_post)
+    eq = sys_dest.I_syn ~ w * sys_src.G * (sys_src.E_syn - sys_dest.V)
+    
+    return Connector(nameof(sys_src), nameof(sys_dest); equation=eq, weight=w)
+end
+
+# Connection from Inhibitory Izhikevich to any Izhikevich (I→E or I→I)
+function Connector(
+    blox_src::IzhikevichInhibBlox,
+    blox_dest::Union{IzhikevichExciBlox, IzhikevichInhibBlox};
+    kwargs...
+)
+    sys_src = get_namespaced_sys(blox_src)
+    sys_dest = get_namespaced_sys(blox_dest)
+    
+    w = generate_weight_param(blox_src, blox_dest; kwargs...)
+    
+    # Inhibitory connection: conductance-based with inhibitory reversal potential
+    eq = sys_dest.I_syn ~ w * sys_src.G * (sys_src.E_syn - sys_dest.V)
+    
+    return Connector(nameof(sys_src), nameof(sys_dest); equation=eq, weight=w)
+end
+
+# Optional: Connection from external input (e.g., ImageStimulus) to Izhikevich neurons
+function Connector(
+    stim::ImageStimulus,
+    neuron::Union{IzhikevichExciBlox, IzhikevichInhibBlox};
+    kwargs...
+)
+    sys_src = get_namespaced_sys(stim)
+    sys_dest = get_namespaced_sys(neuron)
+    
+    w = generate_weight_param(stim, neuron; kwargs...)
+    
+    pixels = stim.stim_parameters
+    
+    # Connect to jcn (junction current) input
+    eq = sys_dest.jcn ~ w * pixels[stim.current_pixel]
+    
+    increment_pixel!(stim)
+    
+    return Connector(nameof(sys_src), nameof(sys_dest); equation=eq, weight=w)
+end
+
+# Connection from ConstantInput or ExternalInput to Izhikevich
+function Connector(
+    blox_src::Union{ConstantInput, ExternalInput},
+    blox_dest::Union{IzhikevichExciBlox, IzhikevichInhibBlox};
+    kwargs...
+)
+    sys_src = get_namespaced_sys(blox_src)
+    sys_dest = get_namespaced_sys(blox_dest)
+    
+    w = generate_weight_param(blox_src, blox_dest; kwargs...)
+    
+    eq = sys_dest.jcn ~ w * sys_src.u
+    
+    return Connector(nameof(sys_src), nameof(sys_dest); equation=eq, weight=w)
+end
