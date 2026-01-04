@@ -113,13 +113,13 @@ include("blox/stochastic.jl")
 include("blox/discrete.jl")
 include("blox/ping_neuron_examples.jl")
 include("blox/reinforcement_learning.jl")
+include("blox/LSM.jl")
 include("gui/GUI.jl")
 include("blox/connections.jl")
 include("blox/blox_utilities.jl")
 include("GraphDynamicsInterop/GraphDynamicsInterop.jl")
 include("Neurographs.jl")
 include("adjacency.jl")
-include("blox/LSM.jl")
 
 const Neuron = AbstractNeuronBlox
 const SpikeSource = AbstractSpikeSource
