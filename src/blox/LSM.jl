@@ -143,10 +143,10 @@ struct IzhikevichInhibBlox <: AbstractInhNeuronBlox
         sts = @variables begin
             V(t) = -65.0
             u(t) = -14.0
-            G(t) = 0.0 [output=true]
+            G(t) = 0.0[output=true]
             z(t) = 0.0
-            I_syn(t) [input=true]
-            jcn(t) [input=true]
+            I_syn(t)[input=true]
+            jcn(t)[input=true]
         end
         
         ps = @parameters begin
