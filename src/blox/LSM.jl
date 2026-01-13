@@ -360,9 +360,9 @@ struct LSMReservoirBlox <: CompositeBlox
         
         bc = connectors_from_graph(g)
         
-        # Build system
+        # Build system - use the simpler signature that handles connectors internally
         sys = isnothing(namespace) ? 
-              system_from_graph(g, reduce(merge!, bc); name, simplify=false) : 
+              system_from_graph(g; name, simplify=false) : 
               system_from_parts(parts; name)
         
         new(namespace, parts, sys, bc, exc_positions, inh_positions)
