@@ -17,17 +17,6 @@
     Author: Generated for Neuroblox integration
 =#
 
-using Neuroblox
-using Neuroblox: AbstractExciNeuronBlox, AbstractInhNeuronBlox, CompositeBlox
-using Neuroblox: namespaced_name, get_namespaced_sys, connectors_from_graph, system_from_parts
-using Neuroblox: add_blox!, Connector
-using ModelingToolkit
-using Graphs, MetaGraphs
-using LinearAlgebra
-using Random
-using SparseArrays
-using Statistics
-
 #=============================================================================
     STANDARD IZHIKEVICH NEURONS
     
@@ -70,28 +59,11 @@ struct IzhikevichExciBlox <: AbstractExciNeuronBlox
         G_syn = 0.5,
         τ = 5.0
     )
-        # State variables
-        sts = @variables begin
-            V(t) = -65.0
-            u(t) = -14.0
-            G(t) = 0.0[output=true]
-            z(t) = 0.0
-            I_syn(t)[input=true]
-            jcn(t)[input=true]
-        end
+        # State variables - using correct MTK syntax
+        @variables V(t)=-65.0 u(t)=-14.0 G(t)=0.0 [output=true] z(t)=0.0 I_syn(t) [input=true] jcn(t) [input=true]
         
         # Parameters
-        ps = @parameters begin
-            a = a
-            b = b
-            c = c
-            d = d
-            I_bg = I_bg
-            E_syn = E_syn
-            G_syn = G_syn
-            τ = τ
-            θ = 30.0  # Spike threshold
-        end
+        ps = @parameters a=a b=b c=c d=d I_bg=I_bg E_syn=E_syn G_syn=G_syn τ=τ θ=30.0
         
         # Synaptic output function (sigmoid)
         G_asymp(v, g) = g / (1 + exp(-0.1 * (v + 20)))
@@ -107,7 +79,7 @@ struct IzhikevichExciBlox <: AbstractExciNeuronBlox
         # Spike event: when V crosses threshold
         spike_event = [V ~ θ] => [V ~ c, u ~ u + d, z ~ G_syn]
         
-        sys = ODESystem(eqs, t, sts, ps; 
+        sys = ODESystem(eqs, t, [V, u, G, z, I_syn, jcn], ps; 
                         name = Symbol(name),
                         continuous_events = [spike_event])
         
@@ -140,26 +112,11 @@ struct IzhikevichInhibBlox <: AbstractInhNeuronBlox
         G_syn = 1.0,
         τ = 10.0
     )
-        sts = @variables begin
-            V(t) = -65.0
-            u(t) = -14.0
-            G(t) = 0.0[output=true]
-            z(t) = 0.0
-            I_syn(t)[input=true]
-            jcn(t)[input=true]
-        end
+        # State variables - using correct MTK syntax
+        @variables V(t)=-65.0 u(t)=-14.0 G(t)=0.0 [output=true] z(t)=0.0 I_syn(t) [input=true] jcn(t) [input=true]
         
-        ps = @parameters begin
-            a = a
-            b = b
-            c = c
-            d = d
-            I_bg = I_bg
-            E_syn = E_syn
-            G_syn = G_syn
-            τ = τ
-            θ = 30.0
-        end
+        # Parameters  
+        ps = @parameters a=a b=b c=c d=d I_bg=I_bg E_syn=E_syn G_syn=G_syn τ=τ θ=30.0
         
         G_asymp(v, g) = g / (1 + exp(-0.1 * (v + 20)))
         
@@ -172,7 +129,7 @@ struct IzhikevichInhibBlox <: AbstractInhNeuronBlox
         
         spike_event = [V ~ θ] => [V ~ c, u ~ u + d, z ~ G_syn]
         
-        sys = ODESystem(eqs, t, sts, ps;
+        sys = ODESystem(eqs, t, [V, u, G, z, I_syn, jcn], ps;
                         name = Symbol(name),
                         continuous_events = [spike_event])
         
@@ -638,6 +595,82 @@ function generate_shapes(
     end
     
     return images, labels
+end
+
+#=============================================================================
+    CONNECTION METHODS FOR IZHIKEVICH NEURONS
+=============================================================================#
+
+# Connection from Excitatory Izhikevich to any Izhikevich (E→E or E→I)
+function Connector(
+    blox_src::IzhikevichExciBlox,
+    blox_dest::Union{IzhikevichExciBlox, IzhikevichInhibBlox};
+    kwargs...
+)
+    sys_src = get_namespaced_sys(blox_src)
+    sys_dest = get_namespaced_sys(blox_dest)
+    
+    w = generate_weight_param(blox_src, blox_dest; kwargs...)
+    
+    # Excitatory connection: conductance-based with reversal potential
+    # I_syn = w * G_pre * (E_syn_pre - V_post)
+    eq = sys_dest.I_syn ~ w * sys_src.G * (sys_src.E_syn - sys_dest.V)
+    
+    return Connector(nameof(sys_src), nameof(sys_dest); equation=eq, weight=w)
+end
+
+# Connection from Inhibitory Izhikevich to any Izhikevich (I→E or I→I)
+function Connector(
+    blox_src::IzhikevichInhibBlox,
+    blox_dest::Union{IzhikevichExciBlox, IzhikevichInhibBlox};
+    kwargs...
+)
+    sys_src = get_namespaced_sys(blox_src)
+    sys_dest = get_namespaced_sys(blox_dest)
+    
+    w = generate_weight_param(blox_src, blox_dest; kwargs...)
+    
+    # Inhibitory connection: conductance-based with inhibitory reversal potential
+    eq = sys_dest.I_syn ~ w * sys_src.G * (sys_src.E_syn - sys_dest.V)
+    
+    return Connector(nameof(sys_src), nameof(sys_dest); equation=eq, weight=w)
+end
+
+# Optional: Connection from external input (e.g., ImageStimulus) to Izhikevich neurons
+function Connector(
+    stim::ImageStimulus,
+    neuron::Union{IzhikevichExciBlox, IzhikevichInhibBlox};
+    kwargs...
+)
+    sys_src = get_namespaced_sys(stim)
+    sys_dest = get_namespaced_sys(neuron)
+    
+    w = generate_weight_param(stim, neuron; kwargs...)
+    
+    pixels = stim.stim_parameters
+    
+    # Connect to jcn (junction current) input
+    eq = sys_dest.jcn ~ w * pixels[stim.current_pixel]
+    
+    increment_pixel!(stim)
+    
+    return Connector(nameof(sys_src), nameof(sys_dest); equation=eq, weight=w)
+end
+
+# Connection from ConstantInput or ExternalInput to Izhikevich
+function Connector(
+    blox_src::Union{ConstantInput, ExternalInput},
+    blox_dest::Union{IzhikevichExciBlox, IzhikevichInhibBlox};
+    kwargs...
+)
+    sys_src = get_namespaced_sys(blox_src)
+    sys_dest = get_namespaced_sys(blox_dest)
+    
+    w = generate_weight_param(blox_src, blox_dest; kwargs...)
+    
+    eq = sys_dest.jcn ~ w * sys_src.u
+    
+    return Connector(nameof(sys_src), nameof(sys_dest); equation=eq, weight=w)
 end
 
 #=============================================================================
